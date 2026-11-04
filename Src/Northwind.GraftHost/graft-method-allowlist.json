@@ -1,0 +1,17 @@
+{
+  "modules": [
+    "Northwind.WebUI.dll"
+  ],
+  "types": [
+    {
+      "publicApiType": "Northwind.WebUI.Controllers.CustomersController",
+      "methods": [
+        "GetCustomers",
+        "GetCustomerById",
+        "RegisterCustomer",
+        "UpdateCustomer",
+        "DeleteCustomer"
+      ]
+    }
+  ]
+}
