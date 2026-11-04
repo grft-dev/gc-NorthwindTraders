@@ -1,33 +1,107 @@
-# Northwind Traders
+# gc-NorthwindTraders (gc-port)
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+Graftcode port of `NorthwindTraders` focused on the customers business slice.
 
-## Description
+## Exposed public surface
 
-This repository has been archived and is no longer actively maintained or supported. The project was initially developed to demonstrate the simplest approach to Clean Architecture with .NET Core. While it is no longer actively maintained, feel free to explore the codebase and adapt it to your own needs if it serves as a useful reference.
+- Module: `Northwind.WebUI.dll`
+- Type: `Northwind.WebUI.Controllers.CustomersController`
+- Methods:
+  - `GetCustomers()`
+  - `GetCustomerById(string id)`
+  - `RegisterCustomer(string id, string companyName, string contactName, string contactTitle, string address, string city, string region, string postalCode, string country, string phone, string fax)`
+  - `UpdateCustomer(string id, string companyName, string contactName, string contactTitle, string address, string city, string region, string postalCode, string country, string phone, string fax)`
+  - `DeleteCustomer(string id)`
 
-For an updated version of this project, you can check out the [Clean Architecture Solution Template](https://github.com/jasontaylordev/CleanArchitecture). The Clean Architecture Solution Template is a new project that demonstrates the simplest approach to Clean Architecture with .NET. It is actively maintained and supported, providing an improved and up-to-date implementation of the principles showcased in this archived repository.
+Allowlist file: `Src/Northwind.GraftHost/graft-method-allowlist.json`
 
-## Project Status
+## Restored business rules
 
-This project has been archived, which means that no further updates, bug fixes, or support will be provided. You can still fork the repository and make modifications if desired.
+- `GetCustomerById` validates `id` as required and exact length `5`.
+- `RegisterCustomer` restores Application validator constraints:
+  - required: `id` (length `5`), `companyName` (max `40`), `postalCode` (max `10`);
+  - optional max lengths: `address` `60`, `city` `15`, `contactName` `30`, `contactTitle` `30`, `country` `15`, `fax` `24`, `phone` `24`, `region` `15`.
+- `UpdateCustomer` restores Application validator constraints:
+  - required: `id` (max `5`), `companyName` (max `40`), `phone` (max `24`), `fax` (max `24`);
+  - optional max lengths: `address` `60`, `city` `15`, `contactName` `30`, `contactTitle` `30`, `country` `15`, `postalCode` `10`, `region` `15`;
+  - conditional rules: Australia postcode must have 4 digits, and Queensland (`postalCode` starts with `4`) requires at least one `07` landline on `phone` or `fax`.
+- `DeleteCustomer` is restored with:
+  - required `id` length `5`;
+  - not found behavior;
+  - existing orders protection when `dbo.Orders` exists.
 
-## Installation and Usage
+## Limitations / residual gaps
 
-As this project is archived, there are no installation instructions or usage guidelines provided. However, if you decide to fork the repository, make sure to update any necessary dependencies, configurations, or settings.
+- Existing-orders delete protection depends on `dbo.Orders` being present in the backing database. The compose seed currently guarantees `Customers` only, so in minimal demo DBs without `Orders`, this rule is skipped intentionally rather than failing every delete call.
 
-## Contributing
+## Legacy cleanup - second pass
 
-Contributions to this project are no longer accepted as it has been archived. You can still fork the repository and work on your own version.
+Removed with high confidence (outside active GRAFT demo path):
 
-## Issues
+- SPA/UI leftovers under `Src/WebUI/ClientApp`.
+- Legacy in-repo test surface under `Tests/`.
+- Related test project entries from `Northwind.sln`.
 
-As this project is archived, any existing issues have also been closed. You can refer to the existing issues for historical context, but no new issues will be addressed.
+Residual candidates intentionally left after second pass:
 
-## License
+- No additional high-confidence candidates were found on the active customers GRAFT path.
 
-This project is licensed under the [MIT License](LICENSE). Please review the license file for more information.
+## Start stack (DB + idempotent seed + GG host)
 
-## Contact
+```powershell
+docker compose -f C:\Coding\Marketing\ports\gc-NorthwindTraders\Src\docker-compose.graft.yml up -d --build
+```
 
-As this project is archived, there is no active contact person or maintainer. You may refer to the contributors listed in the repository for individual contact information.
+Ports:
+
+- GG WebSocket/API: `ws://localhost:8096/ws`
+- Graft Vision: `http://localhost:8097`
+- SQL Server: `localhost,1438`
+
+Stop stack:
+
+```powershell
+docker compose -f C:\Coding\Marketing\ports\gc-NorthwindTraders\Src\docker-compose.graft.yml down -v
+```
+
+## Build host only
+
+```powershell
+dotnet build C:\Coding\Marketing\ports\gc-NorthwindTraders\Src\Northwind.GraftHost\Northwind.GraftHost.csproj -c Release
+```
+
+## Client configuration
+
+Set runtime config for generated NuGet client:
+
+```powershell
+$env:GRAFTCODE_CONFIG_NUGET_NORTHWIND_WEBUI = "name=graft.nuget.Northwind.WebUI; runtime=netcore; modules=graft.nuget.Northwind.WebUI.dll; host=ws://localhost:8096/ws; stateless=true"
+```
+
+Current verified generated package:
+
+- Package ID: `graft.nuget.northwind.webui_9eat7y`
+- Version: `1.0.0`
+- Feed: `https://grft.dev/c7f25212-2e89-4b01-8e80-6044543df771__free`
+
+## Unstable suffix without `GG_PROJECT_KEY`
+
+This demo host does **not** use `GG_PROJECT_KEY`.
+
+- Every generation can produce a new package suffix (for example `_9eat7y`).
+- `gg` logs show the current `dotnet add package ... --source ...` command.
+- Update the external verifier (`gc-northwindtraders-graft-e2e`) with that package ID/feed.
+- If package ID stays the same, NuGet may not refresh `1.0.0`; clear local cache and restore again.
+
+## External verifier
+
+Path: `C:\Coding\Marketing\gc-northwindtraders-graft-e2e`
+
+Run:
+
+```powershell
+dotnet run --project C:\Coding\Marketing\gc-northwindtraders-graft-e2e\gc-northwindtraders-graft-e2e.csproj -c Release -- `
+  --host "ws://localhost:8096/ws" `
+  --stateless true `
+  --report "C:\Coding\Marketing\gc-northwindtraders-graft-e2e\reports\northwindtraders-graft-e2e.json"
+```
